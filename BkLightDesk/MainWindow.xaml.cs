@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using Microsoft.Win32; // Fondamentale per aprire i file
 
 namespace BkLightDesk;
 
@@ -12,7 +13,7 @@ public partial class MainWindow : Window
 {
     private BleManager _bleManager;
     
-    // CORREZIONE FONDAMENTALE: 32x32
+    // Configurazione fissa per la tua matrice
     private const int MATRIX_WIDTH = 32;  
     private const int MATRIX_HEIGHT = 32; 
 
@@ -31,6 +32,8 @@ public partial class MainWindow : Window
         _bleManager = new BleManager();
         _bleManager.LogMessage += OnLogMessageReceived;
     }
+
+    // --- GESTIONE CONNESSIONE ---
 
     private void BtnScan_Click(object sender, RoutedEventArgs e)
     {
@@ -55,30 +58,39 @@ public partial class MainWindow : Window
         BtnScan.Content = "📡  RICERCA DISPOSITIVO";
         BtnScan.Background = _darkGrayBrush;
         BtnScan.IsEnabled = true;
+        
         TxtStatus.Text = "Disconnesso";
         TxtStatus.Foreground = _redBrush;
         StatusLed.Fill = _redBrush;
         StatusLed.Effect = null;
+
         if(BtnRedTest != null) BtnRedTest.IsEnabled = false;
+        if(BtnLoadImage != null) BtnLoadImage.IsEnabled = false;
     }
 
     private void OnLogMessageReceived(string message)
     {
         Dispatcher.Invoke(() => 
         {
-            if (message.Contains("Connesso") || message.Contains("PRONTO"))
+            if (message.Contains("Connesso") || message.Contains("PRONTO") || message.Contains("Successo"))
             {
-                _isUiConnected = true;
-                TxtStatus.Text = "Dispositivo Connesso";
-                TxtStatus.Foreground = Brushes.White;
-                StatusLed.Fill = _greenBrush; 
-                StatusLed.Effect = new DropShadowEffect { Color = Colors.LimeGreen, BlurRadius = 15, ShadowDepth = 0 };
-                BtnScan.Content = "❌  DISCONNETTI";
-                BtnScan.Background = new SolidColorBrush(Color.FromRgb(180, 40, 40));
-                BtnScan.IsEnabled = true;
+                if (!_isUiConnected)
+                {
+                    _isUiConnected = true;
+                    TxtStatus.Text = "Dispositivo Connesso";
+                    TxtStatus.Foreground = Brushes.White;
+                    StatusLed.Fill = _greenBrush; 
+                    StatusLed.Effect = new DropShadowEffect { Color = Colors.LimeGreen, BlurRadius = 15, ShadowDepth = 0 };
+                    
+                    BtnScan.Content = "❌  DISCONNETTI";
+                    BtnScan.Background = new SolidColorBrush(Color.FromRgb(180, 40, 40));
+                    BtnScan.IsEnabled = true;
+                }
+
                 if (BtnRedTest != null) BtnRedTest.IsEnabled = true;
+                if (BtnLoadImage != null) BtnLoadImage.IsEnabled = true;
             }
-            else if (message.Contains("Errore"))
+            else if (message.Contains("Errore") || message.Contains("fallito"))
             {
                 UpdateLog(message);
                 BtnScan.IsEnabled = true;
@@ -87,13 +99,15 @@ public partial class MainWindow : Window
         UpdateLog(message);
     }
 
+    // --- LOGICA TEST ROSSO ---
+
     private async void BtnRedTest_Click(object sender, RoutedEventArgs e)
     {
         if (!_isUiConnected) return;
 
         try
         {
-            UpdateLog("Generazione Immagine Rossa (32x32)...");
+            UpdateLog("Generazione Pattern Rosso (32x32)...");
 
             int width = MATRIX_WIDTH;
             int height = MATRIX_HEIGHT;
@@ -102,7 +116,7 @@ public partial class MainWindow : Window
             int stride = width * 3; 
             byte[] pixels = new byte[height * stride];
 
-            // Riempi tutto di Rosso
+            // Riempi di Rosso
             for (int i = 0; i < pixels.Length; i += 3)
             {
                 pixels[i]     = 0;   // Blue
@@ -112,24 +126,87 @@ public partial class MainWindow : Window
 
             bitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, stride, 0);
 
-            byte[] pngBytes;
-            using (MemoryStream stream = new MemoryStream())
-            {
-                PngBitmapEncoder encoder = new PngBitmapEncoder();
-                encoder.Interlace = PngInterlaceOption.Off; 
-                encoder.Frames.Add(BitmapFrame.Create(bitmap));
-                encoder.Save(stream);
-                pngBytes = stream.ToArray();
-            }
+            // Converti in PNG
+            byte[] pngBytes = ConvertBitmapToPng(bitmap);
 
-            UpdateLog($"PNG Generato ({pngBytes.Length} bytes). Invio...");
-            await _bleManager.SendPngAsync(pngBytes);
+            bool turbo = ChkTurbo.IsChecked == true;
+            UpdateLog($"Invio Test...");
+            await _bleManager.SendPngAsync(pngBytes, turbo);
         }
         catch (Exception ex)
         {
-            UpdateLog($"Errore: {ex.Message}");
+            UpdateLog($"Errore Test: {ex.Message}");
         }
     }
+
+    // --- LOGICA CARICAMENTO IMMAGINE (32x32) ---
+
+    private async void BtnLoadImage_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isUiConnected) return;
+
+        OpenFileDialog openFileDialog = new OpenFileDialog();
+        openFileDialog.Filter = "Immagini|*.jpg;*.jpeg;*.png;*.bmp;*.gif";
+        openFileDialog.Title = "Seleziona immagine";
+
+        if (openFileDialog.ShowDialog() == true)
+        {
+            try
+            {
+                string filename = openFileDialog.FileName;
+                UpdateLog($"Elaborazione: {Path.GetFileName(filename)}...");
+
+                // 1. Carica l'originale
+                BitmapImage original = new BitmapImage();
+                original.BeginInit();
+                original.UriSource = new Uri(filename);
+                original.CacheOption = BitmapCacheOption.OnLoad;
+                original.EndInit();
+
+                // 2. Ridimensiona a 32x32
+                RenderTargetBitmap resizedBitmap = new RenderTargetBitmap(
+                    MATRIX_WIDTH, MATRIX_HEIGHT, 
+                    96, 96, 
+                    PixelFormats.Pbgra32);
+
+                DrawingVisual drawingVisual = new DrawingVisual();
+                using (DrawingContext context = drawingVisual.RenderOpen())
+                {
+                    // Disegna l'immagine scalata per riempire il quadrato 32x32
+                    context.DrawImage(original, new Rect(0, 0, MATRIX_WIDTH, MATRIX_HEIGHT));
+                }
+                resizedBitmap.Render(drawingVisual);
+
+                // 3. Converti in PNG
+                byte[] pngBytes = ConvertBitmapToPng(resizedBitmap);
+
+                bool turbo = ChkTurbo.IsChecked == true;
+                UpdateLog($"Invio immagine ({pngBytes.Length} bytes)...");
+                
+                await _bleManager.SendPngAsync(pngBytes, turbo);
+            }
+            catch (Exception ex)
+            {
+                UpdateLog($"Errore Immagine: {ex.Message}");
+                MessageBox.Show(ex.Message);
+            }
+        }
+    }
+
+    // Helper per creare il PNG
+    private byte[] ConvertBitmapToPng(BitmapSource bitmap)
+    {
+        using (MemoryStream stream = new MemoryStream())
+        {
+            PngBitmapEncoder encoder = new PngBitmapEncoder();
+            encoder.Interlace = PngInterlaceOption.Off; // Importante
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            encoder.Save(stream);
+            return stream.ToArray();
+        }
+    }
+
+    // --- LOGGING ---
 
     private void BtnLogs_Click(object sender, RoutedEventArgs e)
     {
