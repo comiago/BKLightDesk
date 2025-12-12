@@ -11,15 +11,19 @@ namespace BkLightDesk;
 public partial class MainWindow : Window
 {
     private BleManager _bleManager;
-    private const int MATRIX_WIDTH = 64;  
-    private const int MATRIX_HEIGHT = 64; 
+    
+    // CORREZIONE FONDAMENTALE: 32x32
+    private const int MATRIX_WIDTH = 32;  
+    private const int MATRIX_HEIGHT = 32; 
 
     private LogWindow? _logWindow = null; 
     private StringBuilder _logHistory = new StringBuilder();
     private bool _isUiConnected = false;
     
-    // Definiamo il colore Rosso Moderno anche qui per coerenza
-    private readonly SolidColorBrush _redBrush = new SolidColorBrush(Color.FromRgb(255, 68, 68)); // #FF4444
+    private readonly SolidColorBrush _redBrush = new SolidColorBrush(Color.FromRgb(255, 68, 68)); 
+    private readonly SolidColorBrush _greenBrush = new SolidColorBrush(Color.FromRgb(0, 255, 128));
+    private readonly SolidColorBrush _orangeBrush = Brushes.Orange;
+    private readonly SolidColorBrush _darkGrayBrush = new SolidColorBrush(Color.FromRgb(45, 45, 48));
 
     public MainWindow()
     {
@@ -32,44 +36,16 @@ public partial class MainWindow : Window
     {
         if (!_isUiConnected)
         {
-            // Connetti
             TxtStatus.Text = "Ricerca in corso...";
-            TxtStatus.Foreground = Brushes.Orange;
-            StatusLed.Fill = Brushes.Orange;
+            TxtStatus.Foreground = _orangeBrush;
+            StatusLed.Fill = _orangeBrush;
             BtnScan.IsEnabled = false;
             _bleManager.Connect(); 
         }
         else
         {
-            // Disconnetti
             _bleManager.Disconnect();
             SetDisconnectedState();
-        }
-    }
-
-    private async void BtnSendTest_Click(object sender, RoutedEventArgs e)
-    {
-        string path = @"C:\Users\tecno\OneDrive\Desktop\download.jpg"; 
-
-        if (File.Exists(path))
-        {
-            try 
-            {
-                UpdateLog("Elaborazione immagine...");
-                byte[] processedPng = ProcessImageForMatrix(path, MATRIX_WIDTH, MATRIX_HEIGHT);
-                
-                UpdateLog($"Invio {processedPng.Length} bytes...");
-                await _bleManager.InviaImmagineAsync(processedPng);
-            }
-            catch (Exception ex)
-            {
-                UpdateLog($"Errore: {ex.Message}");
-            }
-        }
-        else
-        {
-            UpdateLog($"ERRORE FILE: {path}");
-            MessageBox.Show("File non trovato!", "Errore", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -77,46 +53,82 @@ public partial class MainWindow : Window
     {
         _isUiConnected = false;
         BtnScan.Content = "📡  RICERCA DISPOSITIVO";
-        BtnScan.Background = new SolidColorBrush(Color.FromRgb(45, 45, 48));
+        BtnScan.Background = _darkGrayBrush;
         BtnScan.IsEnabled = true;
-        BtnSend.IsEnabled = false;
-
-        // MODIFICA: Ora torna Rosso invece che Grigio
         TxtStatus.Text = "Disconnesso";
         TxtStatus.Foreground = _redBrush;
         StatusLed.Fill = _redBrush;
         StatusLed.Effect = null;
+        if(BtnRedTest != null) BtnRedTest.IsEnabled = false;
     }
 
     private void OnLogMessageReceived(string message)
     {
         Dispatcher.Invoke(() => 
         {
-            if (message.Contains("PRONTO") || message.Contains("Connesso"))
+            if (message.Contains("Connesso") || message.Contains("PRONTO"))
             {
                 _isUiConnected = true;
                 TxtStatus.Text = "Dispositivo Connesso";
                 TxtStatus.Foreground = Brushes.White;
-                
-                StatusLed.Fill = new SolidColorBrush(Color.FromRgb(0, 255, 128)); 
+                StatusLed.Fill = _greenBrush; 
                 StatusLed.Effect = new DropShadowEffect { Color = Colors.LimeGreen, BlurRadius = 15, ShadowDepth = 0 };
-
-                BtnSend.IsEnabled = true; 
                 BtnScan.Content = "❌  DISCONNETTI";
                 BtnScan.Background = new SolidColorBrush(Color.FromRgb(180, 40, 40));
                 BtnScan.IsEnabled = true;
+                if (BtnRedTest != null) BtnRedTest.IsEnabled = true;
             }
-            else if (message.Contains("Errore") || message.Contains("fallito"))
+            else if (message.Contains("Errore"))
             {
-                // Anche in caso di errore, usiamo il rosso
-                TxtStatus.Text = "Errore / Disconnesso";
-                TxtStatus.Foreground = _redBrush;
-                StatusLed.Fill = _redBrush;
+                UpdateLog(message);
                 BtnScan.IsEnabled = true;
-                if (_isUiConnected) SetDisconnectedState();
             }
         });
         UpdateLog(message);
+    }
+
+    private async void BtnRedTest_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isUiConnected) return;
+
+        try
+        {
+            UpdateLog("Generazione Immagine Rossa (32x32)...");
+
+            int width = MATRIX_WIDTH;
+            int height = MATRIX_HEIGHT;
+            WriteableBitmap bitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgr24, null);
+
+            int stride = width * 3; 
+            byte[] pixels = new byte[height * stride];
+
+            // Riempi tutto di Rosso
+            for (int i = 0; i < pixels.Length; i += 3)
+            {
+                pixels[i]     = 0;   // Blue
+                pixels[i + 1] = 0;   // Green
+                pixels[i + 2] = 255; // Red
+            }
+
+            bitmap.WritePixels(new Int32Rect(0, 0, width, height), pixels, stride, 0);
+
+            byte[] pngBytes;
+            using (MemoryStream stream = new MemoryStream())
+            {
+                PngBitmapEncoder encoder = new PngBitmapEncoder();
+                encoder.Interlace = PngInterlaceOption.Off; 
+                encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                encoder.Save(stream);
+                pngBytes = stream.ToArray();
+            }
+
+            UpdateLog($"PNG Generato ({pngBytes.Length} bytes). Invio...");
+            await _bleManager.SendPngAsync(pngBytes);
+        }
+        catch (Exception ex)
+        {
+            UpdateLog($"Errore: {ex.Message}");
+        }
     }
 
     private void BtnLogs_Click(object sender, RoutedEventArgs e)
@@ -136,25 +148,5 @@ public partial class MainWindow : Window
         string fullMsg = $"[{DateTime.Now:HH:mm:ss}] {msg}";
         _logHistory.AppendLine(fullMsg);
         if (_logWindow != null) _logWindow.AddMessage(fullMsg);
-    }
-
-    private byte[] ProcessImageForMatrix(string filePath, int targetWidth, int targetHeight)
-    {
-        var uri = new Uri(filePath);
-        var original = new BitmapImage();
-        original.BeginInit();
-        original.UriSource = uri;
-        original.CacheOption = BitmapCacheOption.OnLoad;
-        original.EndInit();
-
-        var scaleX = (double)targetWidth / original.PixelWidth;
-        var scaleY = (double)targetHeight / original.PixelHeight;
-        var resized = new TransformedBitmap(original, new ScaleTransform(scaleX, scaleY));
-        var converted = new FormatConvertedBitmap(resized, PixelFormats.Rgb24, null, 0);
-        var encoder = new PngBitmapEncoder();
-        encoder.Interlace = PngInterlaceOption.Off;
-        encoder.Frames.Add(BitmapFrame.Create(converted));
-
-        using (var ms = new MemoryStream()) { encoder.Save(ms); return ms.ToArray(); }
     }
 }

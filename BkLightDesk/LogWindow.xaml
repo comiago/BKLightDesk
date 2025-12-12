@@ -7,7 +7,7 @@
         <TextBox x:Name="TxtOutput"
                  Margin="10"
                  Background="#1E1E1E"
-                 Foreground="#00FF00"
+                 Foreground="#00FFFF"
                  FontFamily="Consolas"
                  FontSize="14"
                  BorderThickness="0"
