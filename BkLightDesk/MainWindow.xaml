@@ -1,7 +1,7 @@
 ﻿<Window x:Class="BkLightDesk.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="BK Light Controller (32x32)" Height="550" Width="600"
+        Title="BK Light Controller (32x32)" Height="600" Width="600"
         ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen"
         Background="#121212">
@@ -62,11 +62,33 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,20">
-            <TextBlock Text="LED MATRIX COMMANDER" Foreground="#888888" FontSize="12" HorizontalAlignment="Center"/>
-            <TextBlock Text="BkLightDesk 32x32" Foreground="White" FontSize="26" FontWeight="Bold" HorizontalAlignment="Center"/>
-            <Separator Margin="50,15,50,0" Background="#333333"/>
-        </StackPanel>
+        <Grid Grid.Row="0" Margin="0,0,0,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                <TextBlock Text="LED MATRIX COMMANDER" Foreground="#888888" FontSize="12"/>
+                <TextBlock Text="BkLightDesk 32x32" Foreground="White" FontSize="26" FontWeight="Bold"/>
+            </StackPanel>
+
+            <Button x:Name="BtnPower" Grid.Column="1" 
+                    Content="⏻" FontSize="24" 
+                    Width="50" Height="50"
+                    Background="#333333" Foreground="#555555"
+                    Click="BtnPower_Click"
+                    IsEnabled="False"
+                    ToolTip="Accendi/Spegni Matrice">
+                <Button.Resources>
+                    <Style TargetType="Border">
+                        <Setter Property="CornerRadius" Value="25"/>
+                    </Style>
+                </Button.Resources>
+            </Button>
+        </Grid>
+        <Separator Grid.Row="0" VerticalAlignment="Bottom" Background="#333333" Margin="0,10,0,0"/>
+
 
         <StackPanel Grid.Row="1" VerticalAlignment="Center">
             
@@ -80,20 +102,8 @@
             <Button x:Name="BtnClock" Content="🕒 OROLOGIO STYLE" Height="40" Margin="0,10,0,0" Click="BtnClock_Click" IsEnabled="False" Background="#6600CC"/>
 
             <Grid Margin="5,25,5,0">
-                
-                <Button x:Name="BtnSettings" 
-                        Content="⚙️ Impostazioni" 
-                        Style="{StaticResource LinkButtonStyle}"
-                        HorizontalAlignment="Left" 
-                        VerticalAlignment="Center"
-                        Click="BtnSettings_Click"/>
-
-                <Button x:Name="BtnLogs" 
-                        Content="Vedi Logs 📝" 
-                        Style="{StaticResource LinkButtonStyle}"
-                        HorizontalAlignment="Right" 
-                        VerticalAlignment="Center"
-                        Click="BtnLogs_Click"/>
+                <Button x:Name="BtnSettings" Content="⚙️ Impostazioni" Style="{StaticResource LinkButtonStyle}" HorizontalAlignment="Left" VerticalAlignment="Center" Click="BtnSettings_Click"/>
+                <Button x:Name="BtnLogs" Content="Vedi Logs 📝" Style="{StaticResource LinkButtonStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" Click="BtnLogs_Click"/>
             </Grid>
         </StackPanel>
 

@@ -2,7 +2,10 @@
 
 public static class AppSettings
 {
-    // Qui salviamo le impostazioni. 
-    // Essendo statiche, sono accessibili da tutte le finestre.
-    public static bool UseTurboMode { get; set; } = true;
+    // Ora legge e scrive direttamente sul file di salvataggio
+    public static bool UseTurboMode 
+    { 
+        get => SettingsManager.UseTurboMode; 
+        set => SettingsManager.UseTurboMode = value; 
+    }
 }
