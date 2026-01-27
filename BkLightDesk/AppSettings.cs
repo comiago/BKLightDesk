@@ -2,7 +2,8 @@
 
 public static class AppSettings
 {
-    // Ora legge e scrive direttamente sul file di salvataggio
+    // Ora questa proprietà fa da ponte verso il SettingsManager.
+    // Quando la leggi o la scrivi, in realtà stai leggendo/scrivendo su file.
     public static bool UseTurboMode 
     { 
         get => SettingsManager.UseTurboMode; 

@@ -2,7 +2,7 @@
 using System.Globalization;
 using System.IO;
 using System.Text;
-using System.Threading.Tasks; // Necessario per Task.Delay
+using System.Threading.Tasks; 
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
@@ -21,7 +21,7 @@ public partial class MainWindow : Window
     private LogWindow? _logWindow = null; 
     private StringBuilder _logHistory = new StringBuilder();
     private bool _isUiConnected = false;
-    private bool _isPowerOn = true; // Stato presunto accensione
+    private bool _isPowerOn = true; 
     
     private DispatcherTimer? _clockTimer;
     private bool _isClockRunning = false;
@@ -35,6 +35,10 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        
+        // 1. CARICA LE IMPOSTAZIONI ALL'AVVIO
+        SettingsManager.Load();
+        
         _bleManager = new BleManager();
         _bleManager.LogMessage += OnLogMessageReceived;
     }
@@ -73,7 +77,6 @@ public partial class MainWindow : Window
         if(BtnLoadImage != null) BtnLoadImage.IsEnabled = false;
         if(BtnClock != null) BtnClock.IsEnabled = false;
         
-        // Reset tasto Power
         if(BtnPower != null) {
             BtnPower.IsEnabled = false;
             BtnPower.Foreground = new SolidColorBrush(Color.FromRgb(85, 85, 85));
@@ -83,7 +86,7 @@ public partial class MainWindow : Window
 
     private void OnLogMessageReceived(string message)
     {
-        Dispatcher.Invoke(() => 
+        Dispatcher.Invoke(async () => // Modificato in async per usare await dentro
         {
             if (message.Contains("Connesso") || message.Contains("PRONTO") || message.Contains("Successo"))
             {
@@ -95,13 +98,18 @@ public partial class MainWindow : Window
                     
                     BtnScan.Content = "❌  DISCONNETTI"; BtnScan.Background = new SolidColorBrush(Color.FromRgb(180, 40, 40)); BtnScan.IsEnabled = true;
                     
-                    // Attiva Power Button
                     BtnPower.IsEnabled = true;
                     BtnPower.Foreground = Brushes.LimeGreen;
                     _isPowerOn = true;
 
+                    // 2. APPLICA LA LUMINOSITÀ SALVATA APPENA CONNESSO
+                    int savedBrightness = SettingsManager.Brightness;
+                    UpdateLog($"Applico luminosità salvata: {savedBrightness}%");
+                    // Aspettiamo un attimo per stabilità
+                    await Task.Delay(300); 
+                    await _bleManager.SetBrightnessAsync(savedBrightness);
+
                     UpdateLog("Avvio automatico Home...");
-                    // Avvia orologio
                     BtnClock_Click(null, null); 
                 }
                 if (!_isClockRunning) EnableButtons(true);
@@ -122,14 +130,12 @@ public partial class MainWindow : Window
         if(BtnClock != null) BtnClock.IsEnabled = enable;
     }
 
-    // --- NUOVO: PULSANTE POWER ---
     private async void BtnPower_Click(object sender, RoutedEventArgs e)
     {
         if (!_isUiConnected) return;
 
         if (_isPowerOn)
         {
-            // SPEGNI
             _isPowerOn = false;
             if (_isClockRunning) StopClock();
             
@@ -141,7 +147,6 @@ public partial class MainWindow : Window
         }
         else
         {
-            // ACCENDI
             _isPowerOn = true;
             BtnPower.Foreground = Brushes.LimeGreen;
             BtnPower.Background = new SolidColorBrush(Color.FromRgb(51, 51, 51));
@@ -149,7 +154,6 @@ public partial class MainWindow : Window
             await _bleManager.SetPowerAsync(true);
             UpdateLog("Matrice accesa.");
 
-            // Ritorna alla Home (Orologio) dopo breve pausa
             await Task.Delay(500); 
             if (!_isClockRunning)
             {
