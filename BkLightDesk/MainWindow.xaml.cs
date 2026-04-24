@@ -26,21 +26,55 @@ public partial class MainWindow : Window
     private DispatcherTimer? _clockTimer;
     private bool _isClockRunning = false;
     private bool _isSendingFrame = false;
+    private bool _isCleaningUp = false;
 
-    private readonly SolidColorBrush _redBrush = new SolidColorBrush(Color.FromRgb(255, 68, 68)); 
-    private readonly SolidColorBrush _greenBrush = new SolidColorBrush(Color.FromRgb(0, 255, 128));
-    private readonly SolidColorBrush _orangeBrush = Brushes.Orange;
-    private readonly SolidColorBrush _darkGrayBrush = new SolidColorBrush(Color.FromRgb(45, 45, 48));
+    // Colori in stile 2026 per i testi e i LED
+    private readonly SolidColorBrush _redBrush = new SolidColorBrush(Color.FromRgb(239, 68, 68));    // #EF4444
+    private readonly SolidColorBrush _greenBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129)); // #10B981
+    private readonly SolidColorBrush _orangeBrush = new SolidColorBrush(Color.FromRgb(245, 158, 11)); // #F59E0B
+    private readonly SolidColorBrush _mutedBrush = new SolidColorBrush(Color.FromRgb(82, 82, 91));   // #52525B
+    private readonly SolidColorBrush _whiteBrush = new SolidColorBrush(Color.FromRgb(248, 250, 252)); // #F8FAFC
 
     public MainWindow()
     {
         InitializeComponent();
         
-        // 1. CARICA LE IMPOSTAZIONI ALL'AVVIO
         SettingsManager.Load();
         
         _bleManager = new BleManager();
         _bleManager.LogMessage += OnLogMessageReceived;
+
+        this.Closing += MainWindow_Closing;
+        Application.Current.DispatcherUnhandledException += App_CrashHandler;
+    }
+
+    private async void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_isCleaningUp) return;
+        e.Cancel = true;
+        _isCleaningUp = true;
+        
+        UpdateLog("Chiusura in corso... Ripristino Firmware.");
+
+        if (_isUiConnected)
+        {
+            if (_clockTimer != null) _clockTimer.Stop();
+            try {
+                await _bleManager.RestoreClockModeAsync();
+                await Task.Delay(800); 
+                _bleManager.Disconnect();
+            } catch { /* Ignora */ }
+        }
+        Application.Current.Shutdown();
+    }
+
+    private void App_CrashHandler(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        if (_bleManager.IsConnected && !_isCleaningUp)
+        {
+            _isCleaningUp = true;
+            try { var t = _bleManager.RestoreClockModeAsync(); t.Wait(1000); } catch {}
+        }
     }
 
     private async void BtnScan_Click(object sender, RoutedEventArgs e)
@@ -67,45 +101,48 @@ public partial class MainWindow : Window
     private void SetDisconnectedState()
     {
         _isUiConnected = false;
-        BtnScan.Content = "📡  RICERCA DISPOSITIVO";
-        BtnScan.Background = _darkGrayBrush;
+        BtnScan.Content = "📡  Connetti Dispositivo";
         BtnScan.IsEnabled = true;
         
-        TxtStatus.Text = "Disconnesso"; TxtStatus.Foreground = _redBrush; StatusLed.Fill = _redBrush; StatusLed.Effect = null;
+        TxtStatus.Text = "Disconnesso"; 
+        TxtStatus.Foreground = _redBrush; 
+        StatusLed.Fill = _redBrush; 
+        StatusLed.Effect = new DropShadowEffect { Color = Color.FromRgb(239, 68, 68), BlurRadius = 10, ShadowDepth = 0, Opacity = 0.6 };
         
-        if(BtnRedTest != null) BtnRedTest.IsEnabled = false;
         if(BtnLoadImage != null) BtnLoadImage.IsEnabled = false;
         if(BtnClock != null) BtnClock.IsEnabled = false;
+        if(BtnRestore != null) BtnRestore.IsEnabled = false;
+        if(BtnPomodoro != null) BtnPomodoro.IsEnabled = false; // <-- Aggiunto Pomodoro
         
         if(BtnPower != null) {
             BtnPower.IsEnabled = false;
-            BtnPower.Foreground = new SolidColorBrush(Color.FromRgb(85, 85, 85));
-            BtnPower.Background = new SolidColorBrush(Color.FromRgb(51, 51, 51));
+            BtnPower.Foreground = _mutedBrush;
         }
     }
 
     private void OnLogMessageReceived(string message)
     {
-        Dispatcher.Invoke(async () => // Modificato in async per usare await dentro
+        Dispatcher.Invoke(async () => 
         {
             if (message.Contains("Connesso") || message.Contains("PRONTO") || message.Contains("Successo"))
             {
                 if (!_isUiConnected)
                 {
                     _isUiConnected = true;
-                    TxtStatus.Text = "Dispositivo Connesso"; TxtStatus.Foreground = Brushes.White;
-                    StatusLed.Fill = _greenBrush; StatusLed.Effect = new DropShadowEffect { Color = Colors.LimeGreen, BlurRadius = 15, ShadowDepth = 0 };
+                    TxtStatus.Text = "Connesso"; 
+                    TxtStatus.Foreground = _whiteBrush;
+                    StatusLed.Fill = _greenBrush; 
+                    StatusLed.Effect = new DropShadowEffect { Color = Color.FromRgb(16, 185, 129), BlurRadius = 10, ShadowDepth = 0, Opacity = 0.6 };
                     
-                    BtnScan.Content = "❌  DISCONNETTI"; BtnScan.Background = new SolidColorBrush(Color.FromRgb(180, 40, 40)); BtnScan.IsEnabled = true;
+                    BtnScan.Content = "❌  Disconnetti"; 
+                    BtnScan.IsEnabled = true;
                     
                     BtnPower.IsEnabled = true;
-                    BtnPower.Foreground = Brushes.LimeGreen;
+                    BtnPower.Foreground = _greenBrush;
                     _isPowerOn = true;
 
-                    // 2. APPLICA LA LUMINOSITÀ SALVATA APPENA CONNESSO
                     int savedBrightness = SettingsManager.Brightness;
                     UpdateLog($"Applico luminosità salvata: {savedBrightness}%");
-                    // Aspettiamo un attimo per stabilità
                     await Task.Delay(300); 
                     await _bleManager.SetBrightnessAsync(savedBrightness);
 
@@ -116,7 +153,12 @@ public partial class MainWindow : Window
             }
             else if (message.Contains("Errore") || message.Contains("fallito") || message.Contains("terminata"))
             {
-                if (!_isUiConnected) { BtnScan.IsEnabled = true; TxtStatus.Text = "Errore / Non Trovato"; TxtStatus.Foreground = _redBrush; StatusLed.Fill = _redBrush; }
+                if (!_isUiConnected) { 
+                    BtnScan.IsEnabled = true; 
+                    TxtStatus.Text = "Errore Connessione"; 
+                    TxtStatus.Foreground = _redBrush; 
+                    StatusLed.Fill = _redBrush; 
+                }
                 UpdateLog(message);
             }
         });
@@ -125,9 +167,10 @@ public partial class MainWindow : Window
 
     private void EnableButtons(bool enable)
     {
-        if(BtnRedTest != null) BtnRedTest.IsEnabled = enable;
         if(BtnLoadImage != null) BtnLoadImage.IsEnabled = enable;
         if(BtnClock != null) BtnClock.IsEnabled = enable;
+        if(BtnRestore != null) BtnRestore.IsEnabled = enable;
+        if(BtnPomodoro != null) BtnPomodoro.IsEnabled = enable; // <-- Aggiunto Pomodoro
     }
 
     private async void BtnPower_Click(object sender, RoutedEventArgs e)
@@ -139,8 +182,7 @@ public partial class MainWindow : Window
             _isPowerOn = false;
             if (_isClockRunning) StopClock();
             
-            BtnPower.Foreground = new SolidColorBrush(Color.FromRgb(80, 80, 80)); 
-            BtnPower.Background = new SolidColorBrush(Color.FromRgb(40, 20, 20)); 
+            BtnPower.Foreground = _mutedBrush; 
 
             await _bleManager.SetPowerAsync(false);
             UpdateLog("Matrice spenta (Standby).");
@@ -148,8 +190,7 @@ public partial class MainWindow : Window
         else
         {
             _isPowerOn = true;
-            BtnPower.Foreground = Brushes.LimeGreen;
-            BtnPower.Background = new SolidColorBrush(Color.FromRgb(51, 51, 51));
+            BtnPower.Foreground = _greenBrush;
 
             await _bleManager.SetPowerAsync(true);
             UpdateLog("Matrice accesa.");
@@ -168,19 +209,6 @@ public partial class MainWindow : Window
         SettingsWindow settings = new SettingsWindow(_bleManager);
         settings.Owner = this; 
         settings.ShowDialog(); 
-    }
-
-    private async void BtnRedTest_Click(object sender, RoutedEventArgs e)
-    {
-        if (!_isUiConnected) return;
-        try {
-            UpdateLog("Generazione Rosso...");
-            WriteableBitmap bitmap = new WriteableBitmap(MATRIX_WIDTH, MATRIX_HEIGHT, 96, 96, PixelFormats.Bgr24, null);
-            byte[] pixels = new byte[MATRIX_HEIGHT * MATRIX_WIDTH * 3];
-            for (int i = 0; i < pixels.Length; i += 3) pixels[i + 2] = 255; 
-            bitmap.WritePixels(new Int32Rect(0, 0, MATRIX_WIDTH, MATRIX_HEIGHT), pixels, MATRIX_WIDTH * 3, 0);
-            await _bleManager.SendPngAsync(ConvertBitmapToPng(bitmap), AppSettings.UseTurboMode);
-        } catch (Exception ex) { UpdateLog($"Errore Test: {ex.Message}"); }
     }
 
     private async void BtnLoadImage_Click(object sender, RoutedEventArgs e)
@@ -205,15 +233,44 @@ public partial class MainWindow : Window
     {
         if (_clockTimer == null) { _clockTimer = new DispatcherTimer(); _clockTimer.Interval = TimeSpan.FromSeconds(1); _clockTimer.Tick += ClockTimer_Tick; }
         if (!_isClockRunning) {
-            _isClockRunning = true; BtnClock.Content = "⏹ FERMA OROLOGIO"; BtnClock.Background = new SolidColorBrush(Color.FromRgb(200, 50, 50)); 
-            EnableButtons(false); BtnClock.IsEnabled = true; _clockTimer.Start(); UpdateClockDisplay(); 
+            _isClockRunning = true; 
+            BtnClock.Content = "⏹ Ferma Orologio"; 
+            BtnClock.Foreground = _redBrush;
+            EnableButtons(false); 
+            BtnClock.IsEnabled = true; 
+            _clockTimer.Start(); 
+            UpdateClockDisplay(); 
         } else StopClock();
+    }
+
+    // --- NUOVA FUNZIONE POMODORO ---
+    private void BtnPomodoro_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isUiConnected) return;
+        
+        if (_isClockRunning) StopClock();
+
+        UpdateLog("🍅 Avviato Pomodoro Timer!");
+        // TODO: Aggiungeremo la logica del timer qui
+    }
+
+    private async void BtnRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isUiConnected) return;
+        if (_isClockRunning) StopClock();
+
+        await _bleManager.RestoreClockModeAsync();
+        UpdateLog("Matrice ripristinata all'orologio originale.");
     }
 
     private void StopClock()
     {
-        _isClockRunning = false; if(_clockTimer != null) _clockTimer.Stop();
-        BtnClock.Content = "🕒 OROLOGIO STYLE"; BtnClock.Background = new SolidColorBrush(Color.FromRgb(102, 0, 204));
+        _isClockRunning = false; 
+        if(_clockTimer != null) _clockTimer.Stop();
+        
+        BtnClock.Content = "🕒 Orologio"; 
+        BtnClock.Foreground = _whiteBrush; 
+        
         if (_isUiConnected) EnableButtons(true);
     }
 
@@ -238,7 +295,7 @@ public partial class MainWindow : Window
             Color dayBgColor = Colors.DeepSkyBlue; if (now.DayOfWeek == DayOfWeek.Sunday) dayBgColor = Colors.Red; if (now.DayOfWeek == DayOfWeek.Saturday) dayBgColor = Colors.Orange;
             ctx.DrawRectangle(new SolidColorBrush(dayBgColor), null, new Rect(0, 0, w, 9));
             string topTextStr; if (now.Second % 6 < 3) topTextStr = now.ToString("ddd", new CultureInfo("it-IT")).ToUpper().Replace(".", ""); else topTextStr = now.ToString("dd/MM");
-            FormattedText dayText = new FormattedText(topTextStr, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Black, FontStretches.Condensed), 9, Brushes.Black, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+            FormattedText dayText = new FormattedText(topTextStr, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(new FontFamily("Segoe UI Variable Display"), FontStyles.Normal, FontWeights.Black, FontStretches.Condensed), 9, Brushes.Black, VisualTreeHelper.GetDpi(this).PixelsPerDip);
             ctx.DrawText(dayText, new Point((w - dayText.Width) / 2, -2));
             LinearGradientBrush timeBrush = new LinearGradientBrush(); timeBrush.GradientStops.Add(new GradientStop(Color.FromRgb(0, 255, 255), 0.0)); timeBrush.GradientStops.Add(new GradientStop(Color.FromRgb(255, 0, 255), 1.0)); timeBrush.StartPoint = new Point(0, 0); timeBrush.EndPoint = new Point(1, 1);
             FormattedText timeText = new FormattedText(timeStr, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Arial"), 11, timeBrush, VisualTreeHelper.GetDpi(this).PixelsPerDip);

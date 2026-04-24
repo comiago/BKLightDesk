@@ -143,7 +143,7 @@ public class BleManager
         }
     }
 
-    // --- LUMINOSITÀ (FIXED: Prefisso 04 80) ---
+    // --- LUMINOSITÀ ---
     public async Task SetBrightnessAsync(int percentage)
     {
         if (_commandChar == null) return;
@@ -152,7 +152,6 @@ public class BleManager
             if (percentage < 0) percentage = 0;
             if (percentage > 100) percentage = 100;
 
-            // Codice estratto: 05 00 (Len) + 04 80 (Prefisso) + Valore
             byte[] cmd = { 0x05, 0x00, 0x04, 0x80, (byte)percentage };
 
             var writer = new DataWriter(); writer.WriteBytes(cmd);
@@ -161,7 +160,7 @@ public class BleManager
         catch (Exception ex) { Log($"Errore Luminosità: {ex.Message}"); }
     }
 
-    // --- POWER ON/OFF (FIXED: Prefisso 07 01 + Anti-Zombie) ---
+    // --- POWER ON/OFF ---
     public async Task SetPowerAsync(bool turnOn)
     {
         if (_commandChar == null) return;
@@ -172,10 +171,9 @@ public class BleManager
             if (!turnOn) _isTurnedOff = true;
             else _isTurnedOff = false;
 
-            if (!turnOn) await Task.Delay(150); // Stop ai treni in corsa
+            if (!turnOn) await Task.Delay(150); 
 
             byte state = turnOn ? (byte)0x01 : (byte)0x00;
-            // Codice estratto: 05 00 (Len) + 07 01 (Prefisso) + Status
             byte[] cmd = { 0x05, 0x00, 0x07, 0x01, state };
 
             var writer = new DataWriter(); writer.WriteBytes(cmd);
@@ -184,15 +182,41 @@ public class BleManager
         catch (Exception ex) { Log($"Errore Power: {ex.Message}"); }
     }
     
-    // --- INVIO IMMAGINI (BLINDATO) ---
+    // --- INVIO IMMAGINI (CON SBLOCCO OROLOGIO) ---
     public async Task SendPngAsync(byte[] pngBytes, bool useTurbo)
     {
         if (_isTurnedOff) return; 
 
         if (_writeChar == null) { Log("Non connesso."); return; }
+        
         try
         {
-            if (!await WriteAndWait(_writeChar, HANDSHAKE_FIRST, ACK_STAGE_ONE, true)) return;
+            // --- FIX SBLOCCO: DISATTIVA MODALITÀ OROLOGIO ---
+            // Inviamo 04 00 05 00 sulla porta DATI. 
+            // Questo dice alla matrice: "Smetti di fare l'orologio e ascolta me!"
+            if (_writeChar != null)
+            {
+                byte[] appMode = { 0x04, 0x00, 0x05, 0x00 }; 
+                var w = new DataWriter(); w.WriteBytes(appMode);
+                await _writeChar.WriteValueAsync(w.DetachBuffer(), GattWriteOption.WriteWithoutResponse);
+                await Task.Delay(60); // Diamo tempo alla matrice di cambiare stato
+            }
+            // --------------------------------------------------
+
+            // Tentativo di Handshake con retry
+            // A volte il primo colpo fallisce perché la matrice si sta svegliando
+            if (!await WriteAndWait(_writeChar, HANDSHAKE_FIRST, ACK_STAGE_ONE, true, 2000)) 
+            {
+                Log("Primo handshake fallito, riprovo...");
+                await Task.Delay(100);
+                // Riprova handshake
+                if (!await WriteAndWait(_writeChar, HANDSHAKE_FIRST, ACK_STAGE_ONE, true, 2000))
+                {
+                    Log("Errore: La matrice non risponde.");
+                    return;
+                }
+            }
+            
             if (_isTurnedOff) return;
 
             await Task.Delay(30); 
@@ -217,10 +241,53 @@ public class BleManager
                 else await SendDataPrudent(fullFrame);
 
                 if (_isTurnedOff) return;
-                if (!await WaitForAck(ACK_STAGE_THREE, 5000)) Log("⚠️ Nessuna conferma.");
+                
+                // Ignora ACK finale mancante (spesso succede dopo lo switch di modalità)
+                if (!await WaitForAck(ACK_STAGE_THREE, 5000)) 
+                {
+                   // Log("Info: Ack finale non ricevuto (normale dopo lo switch).");
+                }
             }
         }
         catch (Exception ex) { Log($"Errore invio: {ex.Message}"); }
+    }
+
+    // --- RIPRISTINO OROLOGIO NATIVO ---
+    public async Task RestoreClockModeAsync()
+    {
+        if (_writeChar == null) { Log("Non connesso."); return; }
+
+        try
+        {
+            _isTurnedOff = false; 
+            Log("--- RIPRISTINO FIRMWARE ORARIO ---");
+            DateTime now = DateTime.Now;
+
+            byte year = (byte)(now.Year - 2000);
+            byte month = (byte)now.Month;
+            byte day = (byte)now.Day;
+            byte weekday = (byte)(now.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)now.DayOfWeek);
+
+            // DATA
+            byte[] dateCmd = new byte[] { 0x0B, 0x00, 0x06, 0x01, 0x04, 0x01, 0x00, year, month, day, weekday };
+            var w1 = new DataWriter(); w1.WriteBytes(dateCmd);
+            await _writeChar.WriteValueAsync(w1.DetachBuffer(), GattWriteOption.WriteWithoutResponse);
+            await Task.Delay(100); 
+
+            // ORA
+            byte[] timeCmd = new byte[] { 0x08, 0x00, 0x01, 0x80, (byte)now.Hour, (byte)now.Minute, (byte)now.Second, 0x00 };
+            var w2 = new DataWriter(); w2.WriteBytes(timeCmd);
+            await _writeChar.WriteValueAsync(w2.DetachBuffer(), GattWriteOption.WriteWithoutResponse);
+            await Task.Delay(100);
+
+            // MODALITÀ CLOCK (Attiva il blocco)
+            byte[] modeCmd = new byte[] { 0x04, 0x00, 0x05, 0x80 };
+            var w3 = new DataWriter(); w3.WriteBytes(modeCmd);
+            await _writeChar.WriteValueAsync(w3.DetachBuffer(), GattWriteOption.WriteWithoutResponse);
+            
+            Log("✅ Ripristino completato.");
+        }
+        catch (Exception ex) { Log($"ERRORE RESTORE: {ex.Message}"); }
     }
 
     private async Task SendDataTurbo(byte[] data)

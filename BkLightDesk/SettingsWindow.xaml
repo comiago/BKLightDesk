@@ -1,51 +1,101 @@
 ﻿<Window x:Class="BkLightDesk.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Impostazioni" Height="300" Width="400"
-        Background="#1E1E1E" ResizeMode="NoResize" WindowStartupLocation="CenterOwner">
+        Title="Impostazioni" Height="360" Width="400"
+        Background="#09090B" ResizeMode="NoResize" WindowStartupLocation="CenterOwner"
+        FontFamily="Segoe UI Variable Display, Segoe UI, Arial">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="CardBg" Color="#121214"/>
+        <SolidColorBrush x:Key="CardBorder" Color="#27272A"/>
+        <SolidColorBrush x:Key="TextMain" Color="#F8FAFC"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#A1A1AA"/>
+
+        <Style TargetType="Button" x:Key="PrimaryBtn">
+            <Setter Property="Background" Value="#F8FAFC"/>
+            <Setter Property="Foreground" Value="#09090B"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="12">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,12"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E2E8F0"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#CBD5E1"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 
     <Grid Margin="20">
-        <StackPanel>
-            <TextBlock Text="IMPOSTAZIONI" Foreground="White" FontWeight="Bold" FontSize="18" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-            <TextBlock Text="Luminosità Matrice" Foreground="#AAAAAA" FontSize="12" Margin="0,0,0,5"/>
+        <TextBlock Grid.Row="0" Text="Impostazioni" Foreground="{StaticResource TextMain}" FontWeight="Black" FontSize="22" Margin="0,0,0,20"/>
+
+        <StackPanel Grid.Row="1">
             
-            <Grid Margin="0,0,0,20">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                
-                <Slider x:Name="SliderBrightness" Grid.Column="0"
-                        Minimum="1" Maximum="100" Value="100"
-                        TickFrequency="1" IsSnapToTickEnabled="True"
-                        Ticks="10,20,30,40,50,60,70,80,90,100" 
-                        TickPlacement="BottomRight"
-                        ValueChanged="SliderBrightness_ValueChanged"
-                        Thumb.DragCompleted="SliderBrightness_DragCompleted"
-                        VerticalAlignment="Center"/>
-                
-                <TextBox x:Name="TxtBrightnessInput" Grid.Column="1"
-                         Text="100" Width="40" Height="24"
-                         Background="#333333" Foreground="White" BorderThickness="1" BorderBrush="#555555"
-                         VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
-                         Margin="10,0,0,0" MaxLength="3"
-                         PreviewTextInput="TxtBrightnessInput_PreviewTextInput"
-                         TextChanged="TxtBrightnessInput_TextChanged"/>
+            <Border Background="{StaticResource CardBg}" CornerRadius="16" BorderBrush="{StaticResource CardBorder}" BorderThickness="1" Padding="15" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="Luminosità Matrice" Foreground="{StaticResource TextMuted}" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,15"/>
+                    
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <Slider x:Name="SliderBrightness" Grid.Column="0"
+                                Minimum="1" Maximum="100" Value="100"
+                                TickFrequency="1" IsSnapToTickEnabled="True"
+                                VerticalAlignment="Center" Margin="0,0,15,0"
+                                ValueChanged="SliderBrightness_ValueChanged"
+                                Thumb.DragCompleted="SliderBrightness_DragCompleted"/>
+                        
+                        <Border Grid.Column="1" Background="#18181B" CornerRadius="8" BorderBrush="#3F3F46" BorderThickness="1" Width="55" Height="32">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <TextBox x:Name="TxtBrightnessInput"
+                                         Text="100" Width="30"
+                                         Background="Transparent" Foreground="{StaticResource TextMain}" BorderThickness="0"
+                                         VerticalContentAlignment="Center" HorizontalContentAlignment="Right"
+                                         MaxLength="3" FontSize="13" FontWeight="SemiBold"
+                                         PreviewTextInput="TxtBrightnessInput_PreviewTextInput"
+                                         TextChanged="TxtBrightnessInput_TextChanged"
+                                         CaretBrush="White"/>
+                                <TextBlock Text="%" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" FontSize="13" Margin="2,0,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
 
-                <TextBlock Text="%" Grid.Column="2" Foreground="White" VerticalAlignment="Center" Margin="5,0,0,0"/>
-            </Grid>
+            <Border Background="{StaticResource CardBg}" CornerRadius="16" BorderBrush="{StaticResource CardBorder}" BorderThickness="1" Padding="15">
+                <StackPanel>
+                    <CheckBox x:Name="ChkTurbo" Foreground="{StaticResource TextMain}" FontSize="14" FontWeight="SemiBold"
+                              Checked="ChkTurbo_Checked" Unchecked="ChkTurbo_Unchecked">
+                        <CheckBox.Content>
+                            <TextBlock Text="Modalità Turbo (Upload Veloce)" Margin="5,0,0,0" Padding="0,0,0,2"/>
+                        </CheckBox.Content>
+                    </CheckBox>
+                    <TextBlock Text="⚠️ Sperimentale: riduce i tempi di caricamento delle immagini." Foreground="#71717A" FontSize="12" Margin="25,5,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
 
-            <CheckBox x:Name="ChkTurbo" Content="Modalità Turbo (Upload Veloce)" 
-                      Foreground="White" FontSize="14" Margin="0,10"
-                      Checked="ChkTurbo_Checked" Unchecked="ChkTurbo_Unchecked"/>
-            
-            <TextBlock Text="⚠️ La modalità turbo è sperimentale." Foreground="#666" FontSize="11" TextWrapping="Wrap"/>
-
-            <Button Content="CHIUDI" Height="35" Margin="0,30,0,0" 
-                    Background="#333333" Foreground="White" BorderThickness="0"
-                    Click="BtnClose_Click"/>
         </StackPanel>
+
+        <Button Grid.Row="2" Content="Chiudi" Style="{StaticResource PrimaryBtn}" Margin="0,20,0,0" Click="BtnClose_Click"/>
     </Grid>
 </Window>
