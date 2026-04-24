@@ -6,10 +6,28 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UseWPF>true</UseWPF>
+        <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="System.Drawing.Common" Version="10.0.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="Assets\*.wav">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Resource Include="Assets\icon.ico" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="Assets\work_end.wav" />
+      <Content Include="Assets\work_end.wav" />
+      <None Remove="Assets\work_start.wav" />
+      <Content Include="Assets\work_start.wav" />
     </ItemGroup>
 
 </Project>

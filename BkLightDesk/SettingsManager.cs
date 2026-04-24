@@ -4,69 +4,116 @@ using System.Text.Json;
 
 namespace BkLightDesk;
 
-// Questa classe rappresenta i dati che vogliamo salvare
-public class AppConfig
+/// <summary>
+/// Data model for user preferences.
+/// </summary>
+public class UserConfiguration
 {
-    public int SavedBrightness { get; set; } = 100; // Default 100%
-    public bool UseTurboMode { get; set; } = true;  // Default True
+    public int Brightness { get; set; } = 100;
+    public bool TurboMode { get; set; } = true;
 }
 
+/// <summary>
+/// Handles loading and saving application settings to a local JSON file.
+/// </summary>
 public static class SettingsManager
 {
-    private static AppConfig _config = new AppConfig();
+    private static UserConfiguration _config = new();
+    private static readonly object _fileLock = new();
     
-    // Percorso salvataggio: %AppData%/Local/BkLightDesk/user_settings.json
-    private static readonly string _folderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BkLightDesk");
-    private static readonly string _filePath = Path.Combine(_folderPath, "user_settings.json");
+    // Path: %AppData%/Local/BkLightDesk/settings.json
+    private static readonly string FolderPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+        "BkLightDesk"
+    );
+    
+    private static readonly string FilePath = Path.Combine(FolderPath, "settings.json");
 
-    // Proprietà statiche: quando le modifichi, salvano automaticamente
+    /// <summary>
+    /// Gets or sets the matrix brightness (1-100). Automatically persists to disk.
+    /// </summary>
     public static int Brightness
     {
-        get => _config.SavedBrightness;
+        get => _config.Brightness;
         set 
         { 
-            _config.SavedBrightness = value; 
+            if (_config.Brightness == value) return;
+            _config.Brightness = value; 
             Save(); 
         }
     }
 
-    public static bool UseTurboMode
+    /// <summary>
+    /// Gets or sets whether Turbo Mode is enabled. Automatically persists to disk.
+    /// </summary>
+    public static bool TurboMode
     {
-        get => _config.UseTurboMode;
+        get => _config.TurboMode;
         set 
         { 
-            _config.UseTurboMode = value; 
+            if (_config.TurboMode == value) return;
+            _config.TurboMode = value; 
             Save(); 
         }
     }
 
+    /// <summary>
+    /// Loads settings from the JSON file. If the file is missing or corrupt, defaults are used.
+    /// </summary>
     public static void Load()
     {
-        try
+        lock (_fileLock)
         {
-            if (!Directory.Exists(_folderPath)) Directory.CreateDirectory(_folderPath);
-            
-            if (File.Exists(_filePath))
+            try
             {
-                string json = File.ReadAllText(_filePath);
-                var loaded = JsonSerializer.Deserialize<AppConfig>(json);
-                if (loaded != null) _config = loaded;
+                if (!Directory.Exists(FolderPath)) 
+                    Directory.CreateDirectory(FolderPath);
+                
+                if (File.Exists(FilePath))
+                {
+                    string json = File.ReadAllText(FilePath);
+                    var loaded = JsonSerializer.Deserialize<UserConfiguration>(json);
+                    if (loaded != null) _config = loaded;
+                }
             }
-        }
-        catch 
-        { 
-            // Se fallisce il caricamento (file corrotto o primo avvio), usa i default
+            catch (Exception)
+            {
+                // On failure (e.g., first run or corrupted file), we fall back to defaults
+                _config = new UserConfiguration();
+            }
         }
     }
 
+    /// <summary>
+    /// Serializes the current configuration to a JSON file.
+    /// </summary>
     private static void Save()
     {
-        try
+        lock (_fileLock)
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            string json = JsonSerializer.Serialize(_config, options);
-            File.WriteAllText(_filePath, json);
+            try
+            {
+                // Ensure directory exists before saving
+                if (!Directory.Exists(FolderPath)) 
+                    Directory.CreateDirectory(FolderPath);
+
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                string json = JsonSerializer.Serialize(_config, options);
+                File.WriteAllText(FilePath, json);
+            }
+            catch (Exception)
+            {
+                // Fail silently to prevent app crashes during IO issues
+            }
         }
-        catch { /* Ignora errori di scrittura */ }
+    }
+
+    /// <summary>
+    /// Resets all settings to their original factory values.
+    /// </summary>
+    public static void ResetToDefaults()
+    {
+        _config = new UserConfiguration();
+        Save();
     }
 }

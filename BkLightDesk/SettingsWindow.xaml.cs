@@ -7,9 +7,12 @@ using System.Windows.Input;
 
 namespace BkLightDesk;
 
+/// <summary>
+/// Logic for the Settings window, handling device configuration and persistence.
+/// </summary>
 public partial class SettingsWindow : Window
 {
-    private BleManager _bleManager; 
+    private readonly BleManager _bleManager; 
     private bool _isUpdatingInternally = false; 
 
     public SettingsWindow(BleManager bleManager)
@@ -17,88 +20,126 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _bleManager = bleManager;
 
-        // 1. CARICA LE IMPOSTAZIONI ALL'APERTURA
-        // Assicuriamoci che i dati siano caricati
+        LoadCurrentSettings();
+    }
+
+    /// <summary>
+    /// Initializes UI components with saved values from SettingsManager.
+    /// </summary>
+    private void LoadCurrentSettings()
+    {
         SettingsManager.Load(); 
         
-        // Imposta la Checkbox
+        // Setup Turbo Mode checkbox
         ChkTurbo.IsChecked = AppSettings.UseTurboMode;
 
-        // Imposta lo Slider (usando il flag per non scatenare eventi inutili)
+        // Setup Brightness controls
         _isUpdatingInternally = true;
-        int savedBri = SettingsManager.Brightness;
-        SliderBrightness.Value = savedBri;
-        if(TxtBrightnessInput != null) TxtBrightnessInput.Text = savedBri.ToString();
+        
+        int savedBrightness = SettingsManager.Brightness;
+        SliderBrightness.Value = savedBrightness;
+        
+        if (TxtBrightnessInput != null) 
+            TxtBrightnessInput.Text = savedBrightness.ToString();
+            
         _isUpdatingInternally = false;
     }
 
-    // Checkbox Turbo: salva automaticamente grazie a AppSettings -> SettingsManager
+    #region Turbo Mode Logic
+
     private void ChkTurbo_Checked(object sender, RoutedEventArgs e) => AppSettings.UseTurboMode = true;
     private void ChkTurbo_Unchecked(object sender, RoutedEventArgs e) => AppSettings.UseTurboMode = false;
-    
-    private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
 
-    // GESTIONE SLIDER
+    #endregion
+
+    #region Brightness Slider Management
+
     private void SliderBrightness_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (TxtBrightnessInput == null) return; 
-        if (_isUpdatingInternally) return;
+        if (TxtBrightnessInput == null || _isUpdatingInternally) return;
 
-        int val = (int)e.NewValue;
+        int value = (int)e.NewValue;
 
-        // Aggiorna solo il testo visivo, non salviamo ancora per non intasare il disco
+        // Synchronize TextBox text without triggering a save/send yet
         _isUpdatingInternally = true;
-        TxtBrightnessInput.Text = val.ToString();
+        TxtBrightnessInput.Text = value.ToString();
         _isUpdatingInternally = false;
     }
 
-    private async void SliderBrightness_DragCompleted(object sender, DragCompletedEventArgs e)
+    /// <summary>
+    /// Triggered when the user releases the mouse button from the slider.
+    /// This prevents flooding the BLE characteristic with too many updates during a drag.
+    /// </summary>
+    private void SliderBrightness_DragCompleted(object sender, DragCompletedEventArgs e)
     {
-        // Questo evento scatta quando l'utente RILASCIA il mouse dallo slider
-        int val = (int)SliderBrightness.Value;
-        
-        // 2. SALVA SU DISCO IL NUOVO VALORE
-        SettingsManager.Brightness = val;
-
-        // Invia al dispositivo
-        if (_bleManager != null && _bleManager.IsConnected) 
-            await _bleManager.SetBrightnessAsync(val);
+        int value = (int)SliderBrightness.Value;
+        CommitBrightnessUpdate(value);
     }
 
-    // GESTIONE INPUT TESTUALE
+    #endregion
+
+    #region Text Input Management
+
+    /// <summary>
+    /// Restricts TextBox input to numeric characters only.
+    /// </summary>
     private void TxtBrightnessInput_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
         Regex regex = new Regex("[^0-9]+"); 
         e.Handled = regex.IsMatch(e.Text);
     }
 
-    private async void TxtBrightnessInput_TextChanged(object sender, TextChangedEventArgs e)
+    private void TxtBrightnessInput_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (_isUpdatingInternally) return;
-        if (TxtBrightnessInput == null || string.IsNullOrEmpty(TxtBrightnessInput.Text)) return;
+        if (_isUpdatingInternally || TxtBrightnessInput == null) return;
+        
+        if (string.IsNullOrEmpty(TxtBrightnessInput.Text)) return;
 
-        if (int.TryParse(TxtBrightnessInput.Text, out int newVal))
+        if (int.TryParse(TxtBrightnessInput.Text, out int newValue))
         {
-            if (newVal > 100)
+            // Cap value at 100%
+            if (newValue > 100)
             {
-                newVal = 100;
+                newValue = 100;
                 _isUpdatingInternally = true;
                 TxtBrightnessInput.Text = "100";
                 TxtBrightnessInput.SelectionStart = 3; 
                 _isUpdatingInternally = false;
             }
             
+            // Sync Slider position
             _isUpdatingInternally = true;
-            SliderBrightness.Value = newVal;
+            SliderBrightness.Value = newValue;
             _isUpdatingInternally = false;
 
-            // 3. SALVA SU DISCO ANCHE QUANDO SI SCRIVE A MANO
-            SettingsManager.Brightness = newVal;
+            // Commit changes to disk and device
+            CommitBrightnessUpdate(newValue);
+        }
+    }
 
-            if (_bleManager != null && _bleManager.IsConnected && newVal > 0)
+    #endregion
+
+    /// <summary>
+    /// Saves the brightness value to the SettingsManager and sends the command to the hardware.
+    /// </summary>
+    private async void CommitBrightnessUpdate(int value)
+    {
+        // 1. Persist to local storage
+        SettingsManager.Brightness = value;
+
+        // 2. Transmit to BLE Device if connected
+        if (_bleManager != null && _bleManager.IsConnected && value >= 0)
+        {
+            try 
             {
-                await _bleManager.SetBrightnessAsync(newVal);
+                await _bleManager.SetBrightnessAsync(value);
+            }
+            catch (Exception)
+            {
+                // Silent fail: Device might have disconnected during update
             }
         }
     }
+
+    private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
 }

@@ -4,8 +4,9 @@
         Title="BK Light Control" Height="680" Width="460"
         ResizeMode="CanMinimize"
         WindowStartupLocation="CenterScreen"
-        FontFamily="Segoe UI Variable Display, Segoe UI, Segoe UI Emoji, Arial"
-        Background="#09090B">
+        FontFamily="Segoe UI Variable Display, Segoe UI, Arial"
+        Background="#09090B"
+        Icon="pack://application:,,,/Assets/icon.ico">
 
     <Window.Resources>
         <SolidColorBrush x:Key="BgDark" Color="#09090B"/>
@@ -99,9 +100,6 @@
                                 <Setter TargetName="border" Property="Background" Value="#27272A"/>
                                 <Setter TargetName="border" Property="BorderBrush" Value="#52525B"/>
                             </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#121214"/>
-                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -109,12 +107,9 @@
         </Style>
     </Window.Resources>
 
-    <Grid Margin="20,20,20,20">
+    <Grid Margin="20">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/> 
-            <RowDefinition Height="Auto"/> 
-            <RowDefinition Height="*"/>    
-        </Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <RowDefinition Height="Auto"/> <RowDefinition Height="*"/>    </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Margin="5,0,5,25">
             <Grid.ColumnDefinitions>
@@ -128,14 +123,13 @@
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button x:Name="BtnLogs" Content="📝" Style="{StaticResource HeaderIconBtn}" ToolTip="Logs" Click="BtnLogs_Click" Margin="0,0,5,0"/>
-                <Button x:Name="BtnSettings" Content="⚙️" Style="{StaticResource HeaderIconBtn}" ToolTip="Settings" Click="BtnSettings_Click"/>
+                <Button x:Name="BtnLogs" Content="📝" Style="{StaticResource HeaderIconBtn}" ToolTip="View Logs" Click="BtnLogs_Click" Margin="0,0,5,0"/>
+                <Button x:Name="BtnSettings" Content="⚙️" Style="{StaticResource HeaderIconBtn}" ToolTip="Device Settings" Click="BtnSettings_Click"/>
             </StackPanel>
         </Grid>
 
         <Border Grid.Row="1" Background="{StaticResource CardBg}" CornerRadius="24" BorderBrush="{StaticResource CardBorder}" BorderThickness="1" Padding="20" Margin="0,0,0,20">
             <StackPanel>
-                
                 <Grid Margin="0,0,0,20">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -148,7 +142,8 @@
                             <DropShadowEffect BlurRadius="10" Color="#EF4444" ShadowDepth="0" Opacity="0.6"/>
                         </Ellipse.Effect>
                     </Ellipse>
-                    <TextBlock x:Name="TxtStatus" Grid.Column="1" Text="Disconnesso" Foreground="#EF4444" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
+                    
+                    <TextBlock x:Name="TxtStatus" Grid.Column="1" Text="Disconnected" Foreground="#EF4444" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
                     
                     <Button x:Name="BtnPower" Grid.Column="2" Content="⏻" FontSize="22" Width="46" Height="46" Click="BtnPower_Click" IsEnabled="False" Cursor="Hand" Background="#18181B" Foreground="#52525B" BorderBrush="#27272A" BorderThickness="1">
                         <Button.Template>
@@ -156,18 +151,12 @@
                                 <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="23" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
                                     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0"/>
                                 </Border>
-                                <ControlTemplate.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="BorderBrush" Value="#52525B"/>
-                                    </Trigger>
-                                </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </Button.Template>
                     </Button>
                 </Grid>
 
-                <Button x:Name="BtnScan" Content="📡  Connetti Dispositivo" Click="BtnScan_Click" Style="{StaticResource PrimaryActionBtn}"/>
-                
+                <Button x:Name="BtnScan" Content="📡  Connect Device" Click="BtnScan_Click" Style="{StaticResource PrimaryActionBtn}"/>
             </StackPanel>
         </Border>
 
@@ -182,14 +171,10 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Button x:Name="BtnClock" Grid.Row="0" Grid.Column="0" Content="🕒 Orologio" Style="{StaticResource BentoTile}" Click="BtnClock_Click" IsEnabled="False" Margin="0,0,5,5"/>
-            
-            <Button x:Name="BtnRestore" Grid.Row="0" Grid.Column="1" Content="🔙 Firmware clock" Style="{StaticResource BentoTile}" Click="BtnRestore_Click" IsEnabled="False" Margin="0,5,0,0"/>
-            
-            <Button x:Name="BtnPomodoro" Grid.Row="1" Grid.Column="0" Content="🍅 Pomodoro" Style="{StaticResource BentoTile}" Click="BtnPomodoro_Click" IsEnabled="False" Margin="0,5,5,5"/>
-            
-            <Button x:Name="BtnLoadImage" Grid.Row="1" Grid.Column="1" Content="📂 Immagine" Style="{StaticResource BentoTile}" Click="BtnLoadImage_Click" IsEnabled="False" Margin="5,0,0,5"/>
+            <Button x:Name="BtnClock" Grid.Row="0" Grid.Column="0" Content="🕒 Smart Clock" Style="{StaticResource BentoTile}" Click="BtnClock_Click" IsEnabled="False" Margin="0,0,5,5"/>
+            <Button x:Name="BtnRestore" Grid.Row="0" Grid.Column="1" Content="🔙 Firmware Clock" Style="{StaticResource BentoTile}" Click="BtnRestore_Click" IsEnabled="False" Margin="5,0,0,5"/>
+            <Button x:Name="BtnPomodoro" Grid.Row="1" Grid.Column="0" Content="🍅 Pomodoro Timer" Style="{StaticResource BentoTile}" Click="BtnPomodoro_Click" IsEnabled="False" Margin="0,5,5,5"/>
+            <Button x:Name="BtnLoadImage" Grid.Row="1" Grid.Column="1" Content="📂 Gallery" Style="{StaticResource BentoTile}" Click="BtnLoadImage_Click" IsEnabled="False" Margin="5,5,0,5"/>
         </Grid>
-
     </Grid>
 </Window>

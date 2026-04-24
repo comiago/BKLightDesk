@@ -1,8 +1,11 @@
 ﻿using System.Windows;
-using System.Windows.Controls;
 
 namespace BkLightDesk;
 
+/// <summary>
+/// Interaction logic for LogWindow.xaml.
+/// Provides a dedicated terminal view for system events and BLE communication logs.
+/// </summary>
 public partial class LogWindow : Window
 {
     public LogWindow()
@@ -10,10 +13,14 @@ public partial class LogWindow : Window
         InitializeComponent();
     }
 
-    // Metodo per aggiungere testo dal MainWindow
+    /// <summary>
+    /// Appends a new log message to the terminal.
+    /// Ensures thread safety by using the UI Dispatcher.
+    /// </summary>
+    /// <param name="message">The text message to display.</param>
     public void AddMessage(string message)
     {
-        // Usa Dispatcher per essere sicuro di scrivere dal thread della UI
+        // Use the Dispatcher to ensure we are writing to the UI from the correct thread
         Dispatcher.Invoke(() =>
         {
             TxtOutput.AppendText(message + "\n");
@@ -21,7 +28,10 @@ public partial class LogWindow : Window
         });
     }
 
-    // Metodo per caricare tutto lo storico quando apri la finestra
+    /// <summary>
+    /// Populates the terminal with the entire existing log history upon opening.
+    /// </summary>
+    /// <param name="history">The concatenated string of all past logs.</param>
     public void SetHistory(string history)
     {
         TxtOutput.Text = history;

@@ -1,12 +1,18 @@
 ﻿namespace BkLightDesk;
 
+/// <summary>
+/// A global proxy class for application settings. 
+/// Provides a simplified interface to access persistent data stored in SettingsManager.
+/// </summary>
 public static class AppSettings
 {
-    // Ora questa proprietà fa da ponte verso il SettingsManager.
-    // Quando la leggi o la scrivi, in realtà stai leggendo/scrivendo su file.
+    /// <summary>
+    /// Acts as a bridge to the persistent SettingsManager.
+    /// When read or written, it automatically triggers disk I/O through the manager.
+    /// </summary>
     public static bool UseTurboMode 
     { 
-        get => SettingsManager.UseTurboMode; 
-        set => SettingsManager.UseTurboMode = value; 
+        get => SettingsManager.TurboMode; 
+        set => SettingsManager.TurboMode = value; 
     }
 }
