@@ -183,11 +183,12 @@
             </Grid.ColumnDefinitions>
 
             <Button x:Name="BtnClock" Grid.Row="0" Grid.Column="0" Content="🕒 Orologio" Style="{StaticResource BentoTile}" Click="BtnClock_Click" IsEnabled="False" Margin="0,0,5,5"/>
-            <Button x:Name="BtnLoadImage" Grid.Row="0" Grid.Column="1" Content="📂 Immagine" Style="{StaticResource BentoTile}" Click="BtnLoadImage_Click" IsEnabled="False" Margin="5,0,0,5"/>
-
+            
+            <Button x:Name="BtnRestore" Grid.Row="0" Grid.Column="1" Content="🔙 Firmware clock" Style="{StaticResource BentoTile}" Click="BtnRestore_Click" IsEnabled="False" Margin="0,5,0,0"/>
+            
             <Button x:Name="BtnPomodoro" Grid.Row="1" Grid.Column="0" Content="🍅 Pomodoro" Style="{StaticResource BentoTile}" Click="BtnPomodoro_Click" IsEnabled="False" Margin="0,5,5,5"/>
-
-            <Button x:Name="BtnRestore" Grid.Row="1" Grid.Column="1" Content="🔙 Firmware clock" Style="{StaticResource BentoTile}" Click="BtnRestore_Click" IsEnabled="False" Margin="0,5,0,0"/>
+            
+            <Button x:Name="BtnLoadImage" Grid.Row="1" Grid.Column="1" Content="📂 Immagine" Style="{StaticResource BentoTile}" Click="BtnLoadImage_Click" IsEnabled="False" Margin="5,0,0,5"/>
         </Grid>
 
     </Grid>

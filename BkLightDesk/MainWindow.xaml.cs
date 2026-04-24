@@ -23,12 +23,22 @@ public partial class MainWindow : Window
     private bool _isUiConnected = false;
     private bool _isPowerOn = true; 
     
+    // Timer Orologio
     private DispatcherTimer? _clockTimer;
     private bool _isClockRunning = false;
+    
+    // Timer Pomodoro
+    private DispatcherTimer? _pomodoroTimer;
+    private bool _isPomodoroRunning = false;
+    private bool _isPomodoroBreak = false;
+    private TimeSpan _pomodoroTimeLeft;
+    private const int POMODORO_WORK_MINUTES = 25;
+    private const int POMODORO_BREAK_MINUTES = 5;
+
     private bool _isSendingFrame = false;
     private bool _isCleaningUp = false;
 
-    // Colori in stile 2026 per i testi e i LED
+    // Colori 2026
     private readonly SolidColorBrush _redBrush = new SolidColorBrush(Color.FromRgb(239, 68, 68));    // #EF4444
     private readonly SolidColorBrush _greenBrush = new SolidColorBrush(Color.FromRgb(16, 185, 129)); // #10B981
     private readonly SolidColorBrush _orangeBrush = new SolidColorBrush(Color.FromRgb(245, 158, 11)); // #F59E0B
@@ -38,7 +48,6 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        
         SettingsManager.Load();
         
         _bleManager = new BleManager();
@@ -59,6 +68,7 @@ public partial class MainWindow : Window
         if (_isUiConnected)
         {
             if (_clockTimer != null) _clockTimer.Stop();
+            if (_pomodoroTimer != null) _pomodoroTimer.Stop();
             try {
                 await _bleManager.RestoreClockModeAsync();
                 await Task.Delay(800); 
@@ -93,6 +103,7 @@ public partial class MainWindow : Window
         else
         {
             if (_isClockRunning) StopClock();
+            if (_isPomodoroRunning) StopPomodoro();
             _bleManager.Disconnect();
             SetDisconnectedState();
         }
@@ -112,7 +123,7 @@ public partial class MainWindow : Window
         if(BtnLoadImage != null) BtnLoadImage.IsEnabled = false;
         if(BtnClock != null) BtnClock.IsEnabled = false;
         if(BtnRestore != null) BtnRestore.IsEnabled = false;
-        if(BtnPomodoro != null) BtnPomodoro.IsEnabled = false; // <-- Aggiunto Pomodoro
+        if(BtnPomodoro != null) BtnPomodoro.IsEnabled = false;
         
         if(BtnPower != null) {
             BtnPower.IsEnabled = false;
@@ -149,7 +160,7 @@ public partial class MainWindow : Window
                     UpdateLog("Avvio automatico Home...");
                     BtnClock_Click(null, null); 
                 }
-                if (!_isClockRunning) EnableButtons(true);
+                if (!_isClockRunning && !_isPomodoroRunning) EnableButtons(true);
             }
             else if (message.Contains("Errore") || message.Contains("fallito") || message.Contains("terminata"))
             {
@@ -170,7 +181,7 @@ public partial class MainWindow : Window
         if(BtnLoadImage != null) BtnLoadImage.IsEnabled = enable;
         if(BtnClock != null) BtnClock.IsEnabled = enable;
         if(BtnRestore != null) BtnRestore.IsEnabled = enable;
-        if(BtnPomodoro != null) BtnPomodoro.IsEnabled = enable; // <-- Aggiunto Pomodoro
+        if(BtnPomodoro != null) BtnPomodoro.IsEnabled = enable;
     }
 
     private async void BtnPower_Click(object sender, RoutedEventArgs e)
@@ -181,6 +192,7 @@ public partial class MainWindow : Window
         {
             _isPowerOn = false;
             if (_isClockRunning) StopClock();
+            if (_isPomodoroRunning) StopPomodoro();
             
             BtnPower.Foreground = _mutedBrush; 
 
@@ -196,7 +208,7 @@ public partial class MainWindow : Window
             UpdateLog("Matrice accesa.");
 
             await Task.Delay(500); 
-            if (!_isClockRunning)
+            if (!_isClockRunning && !_isPomodoroRunning)
             {
                 UpdateLog("Ritorno alla Home...");
                 BtnClock_Click(null, null);
@@ -211,9 +223,13 @@ public partial class MainWindow : Window
         settings.ShowDialog(); 
     }
 
+    // --- GESTIONE IMMAGINI ---
     private async void BtnLoadImage_Click(object sender, RoutedEventArgs e)
     {
         if (!_isUiConnected) return;
+        if (_isClockRunning) StopClock();
+        if (_isPomodoroRunning) StopPomodoro();
+
         OpenFileDialog openFileDialog = new OpenFileDialog { Filter = "Immagini|*.jpg;*.jpeg;*.png;*.bmp;*.gif" };
         if (openFileDialog.ShowDialog() == true)
         {
@@ -229,8 +245,11 @@ public partial class MainWindow : Window
         }
     }
 
+    // --- GESTIONE OROLOGIO APP ---
     private void BtnClock_Click(object? sender, RoutedEventArgs? e)
     {
+        if (_isPomodoroRunning) StopPomodoro();
+
         if (_clockTimer == null) { _clockTimer = new DispatcherTimer(); _clockTimer.Interval = TimeSpan.FromSeconds(1); _clockTimer.Tick += ClockTimer_Tick; }
         if (!_isClockRunning) {
             _isClockRunning = true; 
@@ -243,34 +262,12 @@ public partial class MainWindow : Window
         } else StopClock();
     }
 
-    // --- NUOVA FUNZIONE POMODORO ---
-    private void BtnPomodoro_Click(object sender, RoutedEventArgs e)
-    {
-        if (!_isUiConnected) return;
-        
-        if (_isClockRunning) StopClock();
-
-        UpdateLog("🍅 Avviato Pomodoro Timer!");
-        // TODO: Aggiungeremo la logica del timer qui
-    }
-
-    private async void BtnRestore_Click(object sender, RoutedEventArgs e)
-    {
-        if (!_isUiConnected) return;
-        if (_isClockRunning) StopClock();
-
-        await _bleManager.RestoreClockModeAsync();
-        UpdateLog("Matrice ripristinata all'orologio originale.");
-    }
-
     private void StopClock()
     {
         _isClockRunning = false; 
         if(_clockTimer != null) _clockTimer.Stop();
-        
         BtnClock.Content = "🕒 Orologio"; 
         BtnClock.Foreground = _whiteBrush; 
-        
         if (_isUiConnected) EnableButtons(true);
     }
 
@@ -306,6 +303,126 @@ public partial class MainWindow : Window
             ctx.DrawRectangle(Brushes.DimGray, null, new Rect(2, 27, 4, 1)); ctx.DrawRectangle(Brushes.DimGray, null, new Rect(26, 27, 4, 1));
         }
         bmp.Render(visual); return ConvertBitmapToPng(bmp);
+    }
+
+    // --- GESTIONE POMODORO TIMER ---
+    private void BtnPomodoro_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isUiConnected) return;
+        if (_isClockRunning) StopClock();
+
+        if (_pomodoroTimer == null) { 
+            _pomodoroTimer = new DispatcherTimer(); 
+            _pomodoroTimer.Interval = TimeSpan.FromSeconds(1); 
+            _pomodoroTimer.Tick += PomodoroTimer_Tick; 
+        }
+
+        if (!_isPomodoroRunning) {
+            _isPomodoroRunning = true; 
+            _isPomodoroBreak = false;
+            _pomodoroTimeLeft = TimeSpan.FromMinutes(POMODORO_WORK_MINUTES);
+
+            BtnPomodoro.Content = "⏹ Ferma Pomodoro"; 
+            BtnPomodoro.Foreground = _redBrush;
+            EnableButtons(false); 
+            BtnPomodoro.IsEnabled = true; 
+            
+            UpdateLog("🍅 Avviato Pomodoro Timer (Focus: 25m)!");
+            _pomodoroTimer.Start(); 
+            UpdatePomodoroDisplay(); 
+        } else {
+            StopPomodoro();
+        }
+    }
+
+    private void StopPomodoro()
+    {
+        _isPomodoroRunning = false; 
+        if(_pomodoroTimer != null) _pomodoroTimer.Stop();
+        BtnPomodoro.Content = "🍅 Pomodoro"; 
+        BtnPomodoro.Foreground = _whiteBrush; 
+        if (_isUiConnected) EnableButtons(true);
+        UpdateLog("⏹ Pomodoro interrotto.");
+    }
+
+    private void PomodoroTimer_Tick(object? sender, EventArgs? e) 
+    { 
+        if (!_isUiConnected) return;
+
+        // Decrescita del timer
+        _pomodoroTimeLeft = _pomodoroTimeLeft.Subtract(TimeSpan.FromSeconds(1));
+
+        if (_pomodoroTimeLeft.TotalSeconds <= 0)
+        {
+            // Switch tra Lavoro e Pausa
+            _isPomodoroBreak = !_isPomodoroBreak;
+            _pomodoroTimeLeft = _isPomodoroBreak ? TimeSpan.FromMinutes(POMODORO_BREAK_MINUTES) : TimeSpan.FromMinutes(POMODORO_WORK_MINUTES);
+            UpdateLog(_isPomodoroBreak ? "☕ Pausa iniziata (5m)" : "🍅 Focus iniziato (25m)!");
+        }
+
+        if (!_isSendingFrame) UpdatePomodoroDisplay(); 
+    }
+
+    private async void UpdatePomodoroDisplay()
+    {
+        try { _isSendingFrame = true; byte[] frame = DrawPomodoroFrame(); await _bleManager.SendPngAsync(frame, AppSettings.UseTurboMode); }
+        catch (Exception ex) { UpdateLog($"Errore Pomodoro: {ex.Message}"); StopPomodoro(); }
+        finally { _isSendingFrame = false; }
+    }
+
+    private byte[] DrawPomodoroFrame()
+    {
+        int w = MATRIX_WIDTH; int h = MATRIX_HEIGHT;
+        RenderTargetBitmap bmp = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+        DrawingVisual visual = new DrawingVisual();
+        using (DrawingContext ctx = visual.RenderOpen())
+        {
+            // Sfondo Nero
+            ctx.DrawRectangle(Brushes.Black, null, new Rect(0, 0, w, h));
+
+            // Logica Colori e Progresso
+            TimeSpan totalTime = _isPomodoroBreak ? TimeSpan.FromMinutes(POMODORO_BREAK_MINUTES) : TimeSpan.FromMinutes(POMODORO_WORK_MINUTES);
+            double progress = _pomodoroTimeLeft.TotalSeconds / totalTime.TotalSeconds;
+
+            Color mainColor = _isPomodoroBreak ? Color.FromRgb(245, 158, 11) : Color.FromRgb(16, 185, 129); // Arancio Pausa / Verde Focus
+            SolidColorBrush mainBrush = new SolidColorBrush(mainColor);
+
+            // Icona in alto (Pomodorino o Tazzina)
+            if (!_isPomodoroBreak) {
+                ctx.DrawEllipse(Brushes.Red, null, new Point(w/2, 5), 3, 3); // Corpo pomodoro
+                ctx.DrawRectangle(Brushes.LimeGreen, null, new Rect((w/2)-1, 1, 2, 2)); // Fogliolina
+            } else {
+                ctx.DrawRectangle(Brushes.SaddleBrown, null, new Rect((w/2)-3, 3, 6, 5)); // Corpo tazza
+                ctx.DrawRectangle(Brushes.SaddleBrown, null, new Rect((w/2)+3, 4, 2, 3)); // Manico
+                ctx.DrawRectangle(Brushes.White, null, new Rect((w/2)-1, 1, 1, 2)); // Vapore
+                ctx.DrawRectangle(Brushes.White, null, new Rect((w/2)+1, 0, 1, 2));
+            }
+
+            // Testo Minuti
+            string timeStr = _pomodoroTimeLeft.ToString(@"mm\:ss");
+            FormattedText timeText = new FormattedText(timeStr, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(new FontFamily("Arial"), FontStyles.Normal, FontWeights.Bold, FontStretches.Condensed), 10, mainBrush, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+            
+            // Centra il testo
+            double x = (w - timeText.Width) / 2;
+            ctx.DrawText(timeText, new Point(x, 11));
+
+            // Barra di Avanzamento Cyberpunk (Sotto)
+            ctx.DrawRectangle(new SolidColorBrush(Color.FromRgb(30, 30, 30)), null, new Rect(2, h - 5, w - 4, 3)); // Sfondo barra
+            double barWidth = progress * (w - 4);
+            ctx.DrawRectangle(mainBrush, null, new Rect(2, h - 5, barWidth, 3)); // Progresso
+        }
+        bmp.Render(visual); return ConvertBitmapToPng(bmp);
+    }
+
+    // --- GESTIONE OROLOGIO FIRMWARE E UTILITY ---
+    private async void BtnRestore_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_isUiConnected) return;
+        if (_isClockRunning) StopClock();
+        if (_isPomodoroRunning) StopPomodoro();
+
+        await _bleManager.RestoreClockModeAsync();
+        UpdateLog("Matrice ripristinata all'orologio originale.");
     }
 
     private byte[] ConvertBitmapToPng(BitmapSource bitmap)

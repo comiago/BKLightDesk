@@ -18,7 +18,10 @@ public class BleManager
 
     // Protocollo Immagini
     private static readonly byte[] HANDSHAKE_FIRST  = { 0x08, 0x00, 0x01, 0x80, 0x0E, 0x06, 0x32, 0x00 };
-    private static readonly byte[] HANDSHAKE_SECOND = { 0x04, 0x00, 0x05, 0x80 };
+    
+    // ECCO LA MAGIA: 0x00 alla fine significa "Modalità Immagine Statica" (invece di 0x80 che era l'orologio)
+    private static readonly byte[] HANDSHAKE_SECOND = { 0x04, 0x00, 0x05, 0x00 }; 
+    
     private static readonly byte[] ACK_STAGE_ONE   = { 0x0C, 0x00, 0x01, 0x80, 0x81, 0x06, 0x32, 0x00, 0x00, 0x01, 0x00, 0x01 };
     private static readonly byte[] ACK_STAGE_TWO   = { 0x08, 0x00, 0x05, 0x80, 0x0B, 0x03, 0x07, 0x02 };
     private static readonly byte[] ACK_STAGE_THREE = { 0x05, 0x00, 0x02, 0x00, 0x03 }; 
@@ -143,7 +146,6 @@ public class BleManager
         }
     }
 
-    // --- LUMINOSITÀ ---
     public async Task SetBrightnessAsync(int percentage)
     {
         if (_commandChar == null) return;
@@ -160,7 +162,6 @@ public class BleManager
         catch (Exception ex) { Log($"Errore Luminosità: {ex.Message}"); }
     }
 
-    // --- POWER ON/OFF ---
     public async Task SetPowerAsync(bool turnOn)
     {
         if (_commandChar == null) return;
@@ -182,49 +183,23 @@ public class BleManager
         catch (Exception ex) { Log($"Errore Power: {ex.Message}"); }
     }
     
-    // --- INVIO IMMAGINI (CON SBLOCCO OROLOGIO) ---
+    // --- INVIO IMMAGINI (PULITO E SENZA FINTI HANDSHAKE) ---
     public async Task SendPngAsync(byte[] pngBytes, bool useTurbo)
     {
-        if (_isTurnedOff) return; 
-
-        if (_writeChar == null) { Log("Non connesso."); return; }
+        if (_isTurnedOff || _writeChar == null) return; 
         
         try
         {
-            // --- FIX SBLOCCO: DISATTIVA MODALITÀ OROLOGIO ---
-            // Inviamo 04 00 05 00 sulla porta DATI. 
-            // Questo dice alla matrice: "Smetti di fare l'orologio e ascolta me!"
-            if (_writeChar != null)
-            {
-                byte[] appMode = { 0x04, 0x00, 0x05, 0x00 }; 
-                var w = new DataWriter(); w.WriteBytes(appMode);
-                await _writeChar.WriteValueAsync(w.DetachBuffer(), GattWriteOption.WriteWithoutResponse);
-                await Task.Delay(60); // Diamo tempo alla matrice di cambiare stato
-            }
-            // --------------------------------------------------
+            // 1. IMPOSTA MODALITÀ IMMAGINE (0x00)
+            // Niente più finte ore 14:06! Diciamo solo: "Preparati per un'immagine"
+            byte[] modeImageCmd = { 0x04, 0x00, 0x05, 0x00 };
+            var wMode = new DataWriter(); wMode.WriteBytes(modeImageCmd);
+            await _writeChar.WriteValueAsync(wMode.DetachBuffer(), GattWriteOption.WriteWithoutResponse);
+            await Task.Delay(50); // Pausa minuscola per farla respirare
 
-            // Tentativo di Handshake con retry
-            // A volte il primo colpo fallisce perché la matrice si sta svegliando
-            if (!await WriteAndWait(_writeChar, HANDSHAKE_FIRST, ACK_STAGE_ONE, true, 2000)) 
-            {
-                Log("Primo handshake fallito, riprovo...");
-                await Task.Delay(100);
-                // Riprova handshake
-                if (!await WriteAndWait(_writeChar, HANDSHAKE_FIRST, ACK_STAGE_ONE, true, 2000))
-                {
-                    Log("Errore: La matrice non risponde.");
-                    return;
-                }
-            }
-            
             if (_isTurnedOff) return;
 
-            await Task.Delay(30); 
-            try { await WriteAndWait(_writeChar, HANDSHAKE_SECOND, ACK_STAGE_TWO, true, 800); } catch {}
-            if (_isTurnedOff) return;
-
-            await Task.Delay(50);
-
+            // 2. PREPARAZIONE DATI
             ushort dataLen = (ushort)pngBytes.Length;
             ushort totalLen = (ushort)(dataLen + 15);
             uint crc = Crc32.Compute(pngBytes);
@@ -232,21 +207,21 @@ public class BleManager
             using (var ms = new MemoryStream())
             using (var bw = new BinaryWriter(ms))
             {
+                // Header standard per le immagini PNG
                 bw.Write(totalLen); bw.Write((byte)0x02); bw.Write((ushort)0x0000);
                 bw.Write(dataLen);  bw.Write((ushort)0x0000); bw.Write(crc);
                 bw.Write((byte)0x00); bw.Write((byte)0x65); bw.Write(pngBytes);
 
                 byte[] fullFrame = ms.ToArray();
+                
+                // 3. SPARO DEI DATI
                 if (useTurbo) await SendDataTurbo(fullFrame);
                 else await SendDataPrudent(fullFrame);
 
                 if (_isTurnedOff) return;
                 
-                // Ignora ACK finale mancante (spesso succede dopo lo switch di modalità)
-                if (!await WaitForAck(ACK_STAGE_THREE, 5000)) 
-                {
-                   // Log("Info: Ack finale non ricevuto (normale dopo lo switch).");
-                }
+                // Aspettiamo in silenzio l'ACK di fine trasmissione (giusto per non intasare)
+                await WaitForAck(ACK_STAGE_THREE, 1000);
             }
         }
         catch (Exception ex) { Log($"Errore invio: {ex.Message}"); }
@@ -280,7 +255,7 @@ public class BleManager
             await _writeChar.WriteValueAsync(w2.DetachBuffer(), GattWriteOption.WriteWithoutResponse);
             await Task.Delay(100);
 
-            // MODALITÀ CLOCK (Attiva il blocco)
+            // MODALITÀ CLOCK (Attiva il blocco con 0x80)
             byte[] modeCmd = new byte[] { 0x04, 0x00, 0x05, 0x80 };
             var w3 = new DataWriter(); w3.WriteBytes(modeCmd);
             await _writeChar.WriteValueAsync(w3.DetachBuffer(), GattWriteOption.WriteWithoutResponse);
