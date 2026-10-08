@@ -2,7 +2,9 @@
 
 A modern, high-performance .NET 10 WPF desktop controller for 32x32 RGB LED matrix displays over Bluetooth Low Energy (BLE).
 
-`assets/preview.jpeg`
+## App Preview
+
+![BKLightDesk App Preview](assets/preview.jpeg)
 
 ---
 
