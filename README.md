@@ -39,7 +39,7 @@ For a deep dive into the packet structure, command identifiers, and streaming me
 
 If you want to contribute or build the project yourself:
 
-1. Clone the repository: `git clone https://github.com/yourusername/BkLightDesk.git`
+1. Clone the repository: `git clone https://github.com/comiago/BkLightDesk.git`
 2. Open the solution in **Visual Studio 2022** (ensure .NET 10 SDK is installed).
 3. Restore NuGet packages.
 4. Build and Run the project (F5).
